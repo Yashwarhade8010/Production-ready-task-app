@@ -13,6 +13,20 @@ jobs:
     name: Test Backend
     runs-on: ubuntu-latest
 
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: testpassword
+          MYSQL_DATABASE: cloudops_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptestpassword"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,8 +42,20 @@ jobs:
         working-directory: backend
         run: npm ci
 
+      - name: Initialize test database
+        env:
+          MYSQL_PWD: testpassword
+        run: mysql -h 127.0.0.1 -uroot cloudops_test < database/init.sql
+
       - name: Run backend tests
         working-directory: backend
+        env:
+          PORT: 3000
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USER: root
+          DB_PASSWORD: testpassword
+          DB_NAME: cloudops_test
         run: npm test
 
   build:
