@@ -1,4 +1,4 @@
-name: CloudOps CI
+name: CloudOps CI/CD
 
 on:
   push:
@@ -58,17 +58,43 @@ jobs:
           DB_NAME: cloudops_test
         run: npm test
 
-  build:
-    name: Build Docker Images
+  build-and-push:
+    name: Build and Push Docker Images
     runs-on: ubuntu-latest
     needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build Backend Image
-        run: docker build -t cloudops-backend:ci ./backend
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Build Frontend Image
-        run: docker build -t cloudops-frontend:ci ./frontend
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Generate image tags
+        id: meta
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/cloudops-backend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/cloudops-backend:${{ steps.meta.outputs.sha_short }}
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/cloudops-frontend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/cloudops-frontend:${{ steps.meta.outputs.sha_short }}
